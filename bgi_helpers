@@ -1,0 +1,132 @@
+bgi_needed_externals="dirname basename"
+
+#---  FUNCTION  ----------------------------------------------------------------
+#          NAME:  bgi_check_for_externals
+#   DESCRIPTION:  checks the availability of external commands
+#    PARAMETERS:  externals to check for
+#       RETURNS:  rc == 0 - all externals found
+#                 rc == 1 - one or more external not found
+#                           (prints the missing)
+#-------------------------------------------------------------------------------
+bgi_check_for_externals ()
+{
+    local missing
+    for needed_command in "$@"; do
+        hash "$needed_command" >/dev/null 2>&1 || missing+=($needed_command)
+    done
+
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        echo "${missing[@]}"
+        return 1
+    else
+        return 0
+    fi
+}
+
+# check for our own externals as soon as possible...
+bgi_missing=$(bgi_check_for_externals ${bgi_needed_externals})
+if [[ $? -gt 0 ]]; then
+    >&2 echo "bgi_helpers: can't load, missing external(s) [${bgi_missing}]" 
+    exit 1
+fi
+
+#---  FUNCTION  ----------------------------------------------------------------
+#          NAME:  name_of_weekday
+#   DESCRIPTION:  Returns the name of the n-th day in the week (1-7, 1=Monday)
+#    PARAMETERS:  $1 - int, Number of the week day
+#       RETURNS:  string: Name of the day
+#-------------------------------------------------------------------------------
+name_of_weekday ()
+{
+    declare -i day_number="$1"
+    local weekdays=(NO_ZERO
+        Monday Tuesday  Wednesday Thursday Friday Saturday Sunday )
+    echo ${weekdays[$day_number]}
+}
+
+#---  FUNCTION  ----------------------------------------------------------------
+#          NAME:  abs_path
+#   DESCRIPTION:  Returns the absolute path of it's argument
+#    PARAMETERS:  $1 - string, file system object
+#       RETURNS:  rc = 0: string: Absolute path of this object
+#                 rc = 127: Error
+#-------------------------------------------------------------------------------
+function abs_path ()
+{
+    if [[ -d "$1" ]]; then
+        pushd "$1" >/dev/null
+        pwd
+        popd >/dev/null
+    elif [[ -e $1 ]]; then
+        pushd "$(dirname "$1")" >/dev/null
+        echo "$(pwd)/$(basename "$1")"
+        popd >/dev/null
+    else
+        return 127
+    fi
+}
+
+#---  FUNCTION  ----------------------------------------------------------------
+#          NAME:  clean_dirname
+#   DESCRIPTION:  Removes trailing slashes (if any) from a string
+#    PARAMETERS:  $1 - string, Directory name (with or without trailing slash(es))
+#       RETURNS:  string: Directory name without trailing slash
+#-------------------------------------------------------------------------------
+clean_dirname ()
+{
+    echo ${1%%+(/)}
+}
+
+#---  FUNCTION  ----------------------------------------------------------------
+#          NAME:  my_logger
+#   DESCRIPTION:  logs per logger (if available), by printing to STDERR otherwise
+#    PARAMETERS:  $1 - string, log prio (whatever is understood by logger)
+#                 $2-* Message to log
+#                 $log_facility - Log facility to use (defaults to 'local7')
+#                 $log_tag - tag to add to your log entry
+#       RETURNS:  nothing
+#-------------------------------------------------------------------------------
+function my_logger ()
+{
+    local log_prio=$1
+    shift
+    if hash 'logger'; then
+        logger --stderr --tag "$log_tag" --priority "${log_facility:=local7}.${log_prio}" "$*"
+    else
+        printf '[%s] %s - %s: %s\n' "$(date +'%Y-%m-%d %H:%M:%S')" "$log_tag" "$log_prio" "$*" >&2
+    fi
+}
+
+#---  FUNCTION  ----------------------------------------------------------------
+#          NAME:  log_e,
+#                 log_n
+#                 log_i
+#                 log_d
+#   DESCRIPTION:  log per my_logger on err, notice, info or debug level
+#                 $* Message to log
+#                 $log_verbosity - the functions only log, if their debug
+#                                  level is met
+#       RETURNS:  nothing
+#-------------------------------------------------------------------------------
+log_e () {                               my_logger "err"    "$@" ; }
+log_n () { [ ${log_verbosity} -ge 1 ] && my_logger "notice" "$@" ; }
+log_i () { [ ${log_verbosity} -ge 2 ] && my_logger "info"   "$@" ; }
+log_d () { [ ${log_verbosity} -ge 3 ] && my_logger "debug"  "$@" ; }
+
+#-------------------------------------------------------------------------------
+#          NAME:  bgi_safe_remove_dir
+#   DESCRIPTION:  tries to safely remove a directory, avoiding some quirks
+#                 $1 - directory to remove
+#       RETURNS:  rc of rm
+#-------------------------------------------------------------------------------
+bgi_safe_remove_dir ()
+{
+    local dir_to_remove="$1"
+    if ! rm -rf -- "$(dirname ${dir_to_remove})/$(basename ${dir_to_remove})"; then
+        return $?
+    else
+        return 0
+    fi
+}
+
+# vim: filetype=sh
