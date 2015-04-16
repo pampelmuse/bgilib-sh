@@ -129,4 +129,19 @@ bgi_safe_remove_dir ()
     fi
 }
 
+#-------------------------------------------------------------------------------
+#          NAME:  bgi_safe_remove_file
+#   DESCRIPTION:  tries to safely remove a file, avoiding some quirks
+#                 $1 - file to remove
+#       RETURNS:  rc of rm
+#-------------------------------------------------------------------------------
+bgi_safe_remove_file ()
+{
+    local file_to_remove="$1"
+    if ! rm -f -- "$(dirname ${file_to_remove})/$(basename ${file_to_remove})"; then
+        return $?
+    else
+        return 0
+    fi
+}
 # vim: filetype=sh
