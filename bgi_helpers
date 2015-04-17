@@ -1,3 +1,4 @@
+#!/bin/bash
 #===============================================================================
 #          FILE: bgi_helpers
 #   DESCRIPTION: Provides some helper functions to be sourced in other scripts
