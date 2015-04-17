@@ -6,7 +6,7 @@ bgi_needed_externals="dirname basename"
 #    PARAMETERS:  externals to check for
 #       RETURNS:  rc == 0 - all externals found
 #                 rc == 1 - one or more external not found
-#                           (prints the missing)
+#                           (prints the missing) 
 #-------------------------------------------------------------------------------
 bgi_check_for_externals ()
 {
