@@ -1,16 +1,37 @@
-bgi_needed_externals="dirname basename"
+#===============================================================================
+#          FILE: bgi_helpers
+#   DESCRIPTION: Provides some helper functions to be sourced in other scripts
+#        AUTHOR: Bernd Giegerich (bgi), Bernd.A.Giegerich@gmail.com
+#-------------------------------------------------------------------------------
+# 2015-04-17  bgi  1.0.0  Initial version
+#-------------------------------------------------------------------------------
+bgi_helpers_needed_externals='' # when adding a function, you should add
+                                # the externals needed by this function close
+                                # to the function button by doing a
+                                # bgi_helpers_needed_externals+=('external')
 
-#---  FUNCTION  ----------------------------------------------------------------
-#          NAME:  bgi_check_for_externals
-#   DESCRIPTION:  checks the availability of external commands
-#    PARAMETERS:  externals to check for
-#       RETURNS:  rc == 0 - all externals found
-#                 rc == 1 - one or more external not found
-#                           (prints the missing) 
+#---[FUNCTION]------------------------------------------------------------------
+# Checks external commands for availability
+#
+# Globals:
+#   none
+# Arguments:
+#   $@ - list of externals to check for
+# Returns:
+#   rc 0 - all specified externals are available
+#   rc 1 - externals are missing
+#   STDOUT - list of missing externals (if any)
+# Example:
+#   needed_externals='basename dirname rsync'
+#   if ! missing_externals=$(bgi_check_for_externals ${needed_externals}); then
+#       >&2 echo "Needed externals not found: ${missing_externals}"
+#       exit ${rc_err_missing_dependencies}
+#   fi
 #-------------------------------------------------------------------------------
 bgi_check_for_externals ()
 {
     local missing
+
     for needed_command in "$@"; do
         hash "$needed_command" >/dev/null 2>&1 || missing+=($needed_command)
     done
@@ -23,18 +44,18 @@ bgi_check_for_externals ()
     fi
 }
 
-# check for our own externals as soon as possible...
-bgi_missing=$(bgi_check_for_externals ${bgi_needed_externals})
-if [[ $? -gt 0 ]]; then
-    >&2 echo "bgi_helpers: can't load, missing external(s) [${bgi_missing}]" 
-    exit 1
-fi
-
-#---  FUNCTION  ----------------------------------------------------------------
-#          NAME:  name_of_weekday
-#   DESCRIPTION:  Returns the name of the n-th day in the week (1-7, 1=Monday)
-#    PARAMETERS:  $1 - int, Number of the week day
-#       RETURNS:  string: Name of the day
+#---[FUNCTION]------------------------------------------------------------------
+# Returns the (written) name of the day
+#
+# Globals:
+#   none
+# Arguments:
+#   $1 - Day number (1..7, 1 == Monday)
+# Returns:
+#   STDOUT - Name of the day
+# Example:
+#   day_weekly=1
+#   day_weekly_name=$(name_of_weekday "${day_weekly}")
 #-------------------------------------------------------------------------------
 name_of_weekday ()
 {
@@ -44,47 +65,69 @@ name_of_weekday ()
     echo ${weekdays[$day_number]}
 }
 
-#---  FUNCTION  ----------------------------------------------------------------
-#          NAME:  abs_path
-#   DESCRIPTION:  Returns the absolute path of it's argument
-#    PARAMETERS:  $1 - string, file system object
-#       RETURNS:  rc = 0: string: Absolute path of this object
-#                 rc = 127: Error
+#---[FUNCTION]------------------------------------------------------------------
+# Returns the absolute path for a given file or directory
+# The file or directory must already exist.
+#
+# Globals:
+#   none
+# Arguments:
+#   $1 - file/directory to find the absolute path for
+# Returns:
+#   rc   0 - absolute path found
+#   rc 127 - file/directory does not exist
+#   STDOUT - absolute path of the file/directory
+# Example:
+#   absolute_path=$(abs_path "${path_raw}") || absolute_path=''
 #-------------------------------------------------------------------------------
 function abs_path ()
 {
-    if [[ -d "$1" ]]; then
-        pushd "$1" >/dev/null
+    local directory="$1"
+    if [[ -d "${directory}" ]]; then
+        pushd "${directory}" >/dev/null
         pwd
         popd >/dev/null
-    elif [[ -e $1 ]]; then
-        pushd "$(dirname "$1")" >/dev/null
-        echo "$(pwd)/$(basename "$1")"
+    elif [[ -e "${directory}" ]]; then
+        pushd "$(dirname "${directory}")" >/dev/null
+        echo "$(pwd)/$(basename "${directory}")"
         popd >/dev/null
     else
         return 127
     fi
 }
+bgi_helpers_needed_externals+=("dirname basename")
 
-#---  FUNCTION  ----------------------------------------------------------------
-#          NAME:  clean_dirname
-#   DESCRIPTION:  Removes trailing slashes (if any) from a string
-#    PARAMETERS:  $1 - string, Directory name (with or without trailing slash(es))
-#       RETURNS:  string: Directory name without trailing slash
+#---[FUNCTION]------------------------------------------------------------------
+# Removes trailing slashes (if any) from a string
+#
+# Globals:
+#   none
+# Arguments:
+#   $1 - String to process
+# Returns:
+#   STDOUT - string with trailing slashes removed
+# Example:
+#   src_dir=$(clean_dirname "$1")
 #-------------------------------------------------------------------------------
 clean_dirname ()
 {
     echo ${1%%+(/)}
 }
 
-#---  FUNCTION  ----------------------------------------------------------------
-#          NAME:  my_logger
-#   DESCRIPTION:  logs per logger (if available), by printing to STDERR otherwise
-#    PARAMETERS:  $1 - string, log prio (whatever is understood by logger)
-#                 $2-* Message to log
-#                 $log_facility - Log facility to use (defaults to 'local7')
-#                 $log_tag - tag to add to your log entry
-#       RETURNS:  nothing
+#---[FUNCTION]------------------------------------------------------------------
+# logs per logger (if available), by printing to STDERR otherwise.
+# (If logger is used, a copy of the message is also printed to STDERR)
+#
+# Globals:
+#   log_tag - tag to add to the log entry
+#   log_facility - log facility to use (defaults to 'local7')
+# Arguments:
+#   $1 - log priority (e.g. 'err', 'notice', 'info', 'debug')1111
+#   $* - string(s) to log
+# Returns:
+#   nothing (creates log entries in syslog and on STDERR)
+# Example:
+#   see below, functions log_{e|n|i|d}
 #-------------------------------------------------------------------------------
 function my_logger ()
 {
@@ -97,27 +140,42 @@ function my_logger ()
     fi
 }
 
-#---  FUNCTION  ----------------------------------------------------------------
-#          NAME:  log_e,
-#                 log_n
-#                 log_i
-#                 log_d
-#   DESCRIPTION:  log per my_logger on err, notice, info or debug level
-#                 $* Message to log
-#                 $log_verbosity - the functions only log, if their debug
-#                                  level is met
-#       RETURNS:  nothing
+#---[FUNCTION]------------------------------------------------------------------
+# Four functions using the my_logger function above to log on err, notice,
+# info or debug level if log_verbosity meets their verbosity level.
+#
+# Globals:
+#   log_tag - tag to add to the log entry
+#   log_facility - log facility to use (defaults to 'local7')
+#   log_verbosity - controls, if log entries of a specific severity are created
+# Arguments:
+#   $@ - string(s) to log
+# Returns:
+#   nothing (creates log entries in syslog and on STDERR)
+# Example:
+#   log_e "Didn't work"
+#   log_n "Start processing"
+#   log_d "var1 is set to ${var1}"
 #-------------------------------------------------------------------------------
-log_e () {                               my_logger "err"    "$@" ; }
-log_n () { [ ${log_verbosity} -ge 1 ] && my_logger "notice" "$@" ; }
-log_i () { [ ${log_verbosity} -ge 2 ] && my_logger "info"   "$@" ; }
-log_d () { [ ${log_verbosity} -ge 3 ] && my_logger "debug"  "$@" ; }
+log_e () {                                 my_logger "err"    "$@" ; }
+log_n () { [[ ${log_verbosity} -ge 1 ]] && my_logger "notice" "$@" ; }
+log_i () { [[ ${log_verbosity} -ge 2 ]] && my_logger "info"   "$@" ; }
+log_d () { [[ ${log_verbosity} -ge 3 ]] && my_logger "debug"  "$@" ; }
 
-#-------------------------------------------------------------------------------
-#          NAME:  bgi_safe_remove_dir
-#   DESCRIPTION:  tries to safely remove a directory, avoiding some quirks
-#                 $1 - directory to remove
-#       RETURNS:  rc of rm
+#---[FUNCTION]------------------------------------------------------------------
+# Safe removal of a directory, avoiding some typical quirks
+#
+# Globals:
+#   none
+# Arguments:
+#   $1 - file or directory to remove
+# Returns:
+#   rc 0   - file/directory removed
+#   rc > 0 - error removing file/dir, rc is the rc of rm
+# Example:
+#   if ! bgi_safe_remove_dir "${dir_to_remove}"; then
+#       log_e "Error removing [${dir_to_remove}], rm returned rc [$?]"
+#   fi
 #-------------------------------------------------------------------------------
 bgi_safe_remove_dir ()
 {
@@ -128,12 +186,22 @@ bgi_safe_remove_dir ()
         return 0
     fi
 }
+bgi_helpers_needed_externals+=("rm")
 
-#-------------------------------------------------------------------------------
-#          NAME:  bgi_safe_remove_file
-#   DESCRIPTION:  tries to safely remove a file, avoiding some quirks
-#                 $1 - file to remove
-#       RETURNS:  rc of rm
+#---[FUNCTION]------------------------------------------------------------------
+# Safe removal of a file, avoiding some typical quirks
+#
+# Globals:
+#   none
+# Arguments:
+#   $1 - file to remove
+# Returns:
+#   rc 0   - file/directory removed
+#   rc > 0 - error removing file/dir, rc is the rc of rm
+# Example:
+#   if ! bgi_safe_remove_file "${file_to_remove}"; then
+#       log_e "Error removing [${file_to_remove}], rm returned rc [$?]"
+#   fi
 #-------------------------------------------------------------------------------
 bgi_safe_remove_file ()
 {
@@ -144,4 +212,15 @@ bgi_safe_remove_file ()
         return 0
     fi
 }
+bgi_helpers_needed_externals+=("rm")
+
+
+#===============================================================================
+# check for our own externals
+bgi_helpers_missing=$(bgi_check_for_externals ${bgi_helpers_needed_externals})
+if [[ $? -gt 0 ]]; then
+    >&2 echo "bgi_helpers: can't load, missing [${bgi_helpers_missing}]" 
+    exit 1
+fi
+
 # vim: filetype=sh
